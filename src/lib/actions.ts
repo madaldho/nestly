@@ -24,12 +24,14 @@ export async function logFeed(input: {
 }) {
   const meta = await baseMeta()
   const profile = await db.profile.get('default')
+  const feedKind = input.feedKind ?? 'formula'
+  const isBreast = feedKind !== 'formula'
   const event: BabyEvent = {
     id: createId(),
     type: 'feed',
     timestamp: input.timestamp ?? new Date().toISOString(),
-    ml: input.ml ?? profile?.defaultFeedMl ?? 90,
-    feedKind: input.feedKind ?? 'formula',
+    ml: isBreast ? input.ml : (input.ml ?? profile?.defaultFeedMl ?? 90),
+    feedKind,
     durationMin: input.durationMin,
     notes: input.notes,
     ...meta,
@@ -112,4 +114,28 @@ export async function softDeleteEvent(id: string) {
     updatedAt: new Date().toISOString(),
     synced: false,
   })
+}
+
+export async function restoreEvent(id: string) {
+  await db.events.update(id, {
+    deleted: false,
+    updatedAt: new Date().toISOString(),
+    synced: false,
+  })
+}
+
+export async function updateEvent(
+  id: string,
+  patch: Partial<Omit<BabyEvent, 'id' | 'type'>>,
+) {
+  await db.events.update(id, {
+    ...patch,
+    updatedAt: new Date().toISOString(),
+    synced: false,
+  })
+}
+
+/** ISO timestamp for “N minutes ago” (clamped ≥ 0). */
+export function minutesAgoIso(mins: number) {
+  return new Date(Date.now() - Math.max(0, mins) * 60_000).toISOString()
 }

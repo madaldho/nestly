@@ -148,7 +148,13 @@ export function Sheet({
   )
 }
 
-export function Toast({ message }: { message: string | null }) {
+export function Toast({
+  message,
+  onClick,
+}: {
+  message: string | null
+  onClick?: () => void
+}) {
   return (
     <AnimatePresence>
       {message ? (
@@ -159,9 +165,15 @@ export function Toast({ message }: { message: string | null }) {
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
         >
-          <div className="rounded-full border border-white/40 bg-ink/88 px-[18px] py-2.5 text-caption text-white shadow-[0_8px_28px_rgba(0,0,0,0.18)] backdrop-blur-xl">
+          <button
+            type="button"
+            onClick={onClick}
+            className={`rounded-full border border-white/40 bg-ink/88 px-[18px] py-2.5 text-caption text-white shadow-[0_8px_28px_rgba(0,0,0,0.18)] backdrop-blur-xl ${
+              onClick ? 'pointer-events-auto press' : ''
+            }`}
+          >
             {message}
-          </div>
+          </button>
         </motion.div>
       ) : null}
     </AnimatePresence>

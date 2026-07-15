@@ -16,7 +16,7 @@ import {
   formatRelativeMinutes,
   formatTime,
 } from '@/lib/insights'
-import { softDeleteEvent } from '@/lib/actions'
+import { restoreEvent, softDeleteEvent } from '@/lib/actions'
 import { Card } from '@/components/ui/primitives'
 
 const typeIcon = {
@@ -29,7 +29,13 @@ const typeIcon = {
 } as const
 
 function subtitle(event: BabyEvent) {
-  if (event.type === 'feed' && event.feedKind) return feedKindLabel[event.feedKind]
+  if (event.type === 'feed' && event.feedKind) {
+    const kind = feedKindLabel[event.feedKind]
+    if (event.feedKind !== 'formula' && event.durationMin) {
+      return `${kind} · ${event.durationMin} mnt`
+    }
+    return kind
+  }
   if (event.type === 'cry' && event.cryCause) return cryCauseLabel[event.cryCause]
   if (event.type === 'sleep' && event.sleepEnd) {
     const mins = differenceInMinutes(parseISO(event.sleepEnd), parseISO(event.timestamp))
@@ -43,12 +49,20 @@ function subtitle(event: BabyEvent) {
 export function EventRow({
   event,
   showDelete = false,
+  onDeleted,
 }: {
   event: BabyEvent
   showDelete?: boolean
+  onDeleted?: (event: BabyEvent) => void
 }) {
   const Icon = typeIcon[event.type]
   const mins = differenceInMinutes(new Date(), parseISO(event.timestamp))
+
+  async function handleDelete() {
+    if (!window.confirm(`Hapus “${eventTitle(event)}”?`)) return
+    await softDeleteEvent(event.id)
+    onDeleted?.(event)
+  }
 
   return (
     <div className="flex items-center gap-4 px-5 py-3.5">
@@ -72,7 +86,7 @@ export function EventRow({
         <button
           type="button"
           aria-label="Hapus catatan"
-          onClick={() => softDeleteEvent(event.id)}
+          onClick={() => void handleDelete()}
           className="press flex h-11 w-11 items-center justify-center rounded-full text-ink-muted hover:text-ink"
         >
           <Trash size={18} weight="regular" />
@@ -86,10 +100,12 @@ export function EventList({
   events,
   empty,
   showDelete,
+  onDeleted,
 }: {
   events: BabyEvent[]
   empty: string
   showDelete?: boolean
+  onDeleted?: (event: BabyEvent) => void
 }) {
   if (events.length === 0) {
     return (
@@ -105,8 +121,18 @@ export function EventList({
   return (
     <Card className="divide-y divide-divider overflow-hidden">
       {events.map((event) => (
-        <EventRow key={event.id} event={event} showDelete={showDelete} />
+        <EventRow
+          key={event.id}
+          event={event}
+          showDelete={showDelete}
+          onDeleted={onDeleted}
+        />
       ))}
     </Card>
   )
+}
+
+/** Toast helper: call after delete to offer undo */
+export async function undoDelete(eventId: string) {
+  await restoreEvent(eventId)
 }
