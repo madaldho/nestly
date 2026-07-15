@@ -25,8 +25,6 @@ import { activeEvents, cryCauseLabel, formatTime } from '@/lib/insights'
 import { Card, PillButton, Toast } from '@/components/ui/primitives'
 import { WhenField, defaultWhenValue, type WhenValue } from '@/components/features/WhenField'
 import { whenToIso } from '@/lib/when'
-import { WhenField, defaultWhenValue, type WhenValue } from '@/components/features/WhenField'
-import { whenToIso } from '@/lib/when'
 import type { BabyEvent, CryCause } from '@/types'
 
 const NO_EVENTS: BabyEvent[] = []

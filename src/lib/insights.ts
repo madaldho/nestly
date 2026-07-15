@@ -130,6 +130,71 @@ export function last7DaySummaries(events: BabyEvent[]) {
   return Array.from({ length: 7 }, (_, i) => buildDaySummary(events, subDays(new Date(), i)))
 }
 
+export function eventsInRange(events: BabyEvent[], start: Date, end: Date) {
+  return activeEvents(events)
+    .filter((e) => {
+      const t = parseISO(e.timestamp).getTime()
+      return t >= start.getTime() && t <= end.getTime()
+    })
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+}
+
+export function summariesForDays(events: BabyEvent[], days: Date[]) {
+  return days.map((d) => buildDaySummary(events, d))
+}
+
+export function aggregateSummaries(days: DaySummary[]): DaySummary {
+  const causeCount: Record<string, number> = {}
+  let totalMl = 0
+  let feedCount = 0
+  let diaperCount = 0
+  let dirtyCount = 0
+  let sleepMinutes = 0
+  let cryCount = 0
+
+  for (const d of days) {
+    totalMl += d.totalMl
+    feedCount += d.feedCount
+    diaperCount += d.diaperCount
+    dirtyCount += d.dirtyCount
+    sleepMinutes += d.sleepMinutes
+    cryCount += d.cryCount
+    if (d.topCryCause) {
+      causeCount[d.topCryCause] = (causeCount[d.topCryCause] ?? 0) + 1
+    }
+  }
+
+  // Prefer actual cry cause frequency from days if we only have topCryCause votes —
+  // better: recount from events, but this is ok for overview chips.
+  const topCryCause =
+    (Object.entries(causeCount).sort((a, b) => b[1] - a[1])[0]?.[0] as CryCause | undefined) ??
+    null
+
+  return {
+    date: days[0]?.date ?? format(new Date(), 'yyyy-MM-dd'),
+    totalMl,
+    feedCount,
+    diaperCount,
+    dirtyCount,
+    sleepMinutes,
+    cryCount,
+    topCryCause,
+  }
+}
+
+/** Aggregate cry causes across a filtered event list (accurate). */
+export function topCryCauseInEvents(events: BabyEvent[]): CryCause | null {
+  const cries = activeEvents(events).filter((e) => e.type === 'cry' && e.cryCause)
+  const causeCount = cries.reduce<Record<string, number>>((acc, e) => {
+    acc[e.cryCause!] = (acc[e.cryCause!] ?? 0) + 1
+    return acc
+  }, {})
+  return (
+    (Object.entries(causeCount).sort((a, b) => b[1] - a[1])[0]?.[0] as CryCause | undefined) ??
+    null
+  )
+}
+
 export function eventTitle(event: BabyEvent) {
   switch (event.type) {
     case 'feed':
