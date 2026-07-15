@@ -23,6 +23,10 @@ import { analyzeCryHybrid } from '@/lib/cry-hybrid'
 import { loadCryModel } from '@/lib/cry-ml'
 import { activeEvents, cryCauseLabel, formatTime } from '@/lib/insights'
 import { Card, PillButton, Toast } from '@/components/ui/primitives'
+import { WhenField, defaultWhenValue, type WhenValue } from '@/components/features/WhenField'
+import { whenToIso } from '@/lib/when'
+import { WhenField, defaultWhenValue, type WhenValue } from '@/components/features/WhenField'
+import { whenToIso } from '@/lib/when'
 import type { BabyEvent, CryCause } from '@/types'
 
 const NO_EVENTS: BabyEvent[] = []
@@ -353,9 +357,11 @@ function AnalysisResultCard({
     usedMl?: boolean
     source?: string
   }
-  onLog: (cause: CryCause, label: string) => void
+  onLog: (cause: CryCause, label: string, timestamp?: string) => void
   onRetry: () => void
 }) {
+  const [when, setWhen] = useState<WhenValue>(defaultWhenValue)
+
   if (!result.ok || !result.top) return null
   const top = result.top
   const Icon = causeIcons[top.cause] ?? Ear
@@ -443,10 +449,14 @@ function AnalysisResultCard({
           . Bukan diagnosis medis.
         </p>
 
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+        <div className="mt-5">
+          <WhenField value={when} onChange={setWhen} />
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <PillButton
             className="flex-1"
-            onClick={() => onLog(top.cause, top.label)}
+            onClick={() => onLog(top.cause, top.label, whenToIso(when))}
           >
             Catat sebagai {cryCauseLabel[top.cause]}
           </PillButton>
@@ -484,8 +494,8 @@ export function CryAnalysisPage() {
     window.setTimeout(() => setToast(null), 2200)
   }
 
-  async function quickLog(cause: CryCause, label?: string) {
-    await logCry({ cryCause: cause })
+  async function quickLog(cause: CryCause, label?: string, timestamp?: string) {
+    await logCry({ cryCause: cause, timestamp })
     showToast(`Tangis "${label ?? cryCauseLabel[cause]}" tercatat`)
   }
 
@@ -631,7 +641,7 @@ export function CryAnalysisPage() {
         {result?.ok ? (
           <AnalysisResultCard
             result={result}
-            onLog={(cause, label) => void quickLog(cause, label)}
+            onLog={(cause, label, timestamp) => void quickLog(cause, label, timestamp)}
             onRetry={reset}
           />
         ) : null}
@@ -716,12 +726,11 @@ export function CryAnalysisPage() {
                             </li>
                           ))}
                         </ul>
-                        <PillButton
-                          onClick={() => void quickLog(item.cause, item.label)}
-                          className="w-full"
-                        >
-                          Catat sebagai "{item.label}"
-                        </PillButton>
+                        <DunstanLogButton
+                          cause={item.cause}
+                          label={item.label}
+                          onLog={quickLog}
+                        />
                       </div>
                     </motion.div>
                   ) : null}
@@ -847,5 +856,29 @@ function RecentCries({ events }: { events: BabyEvent[] }) {
         </div>
       ))}
     </Card>
+  )
+}
+
+function DunstanLogButton({
+  cause,
+  label,
+  onLog,
+}: {
+  cause: CryCause
+  label: string
+  onLog: (cause: CryCause, label?: string, timestamp?: string) => void | Promise<void>
+}) {
+  const [when, setWhen] = useState<WhenValue>(defaultWhenValue)
+
+  return (
+    <div className="space-y-4">
+      <WhenField value={when} onChange={setWhen} />
+      <PillButton
+        onClick={() => void onLog(cause, label, whenToIso(when))}
+        className="w-full"
+      >
+        Catat sebagai "{label}"
+      </PillButton>
+    </div>
   )
 }

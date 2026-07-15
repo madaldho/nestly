@@ -1,24 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Clock, Minus, Plus } from '@phosphor-icons/react'
+import { Minus, Plus } from '@phosphor-icons/react'
 import {
   Field,
   NoteField,
   OptionChip,
   PillButton,
   Sheet,
-  TextField,
 } from '@/components/ui/primitives'
-import {
-  clockTimeToIso,
-  endSleep,
-  formatMinsAgoLabel,
-  logCry,
-  logDiaper,
-  logFeed,
-  logSleep,
-  minutesAgoIso,
-} from '@/lib/actions'
+import { WhenField, defaultWhenValue, type WhenValue } from '@/components/features/WhenField'
+import { whenToIso } from '@/lib/when'
+import { endSleep, logCry, logDiaper, logFeed, logSleep } from '@/lib/actions'
 import type { CryCause, DiaperKind, FeedKind, QuickAction } from '@/types'
 import { db } from '@/db'
 import { useLiveQuery } from 'dexie-react-hooks'
@@ -45,20 +37,6 @@ function readLastFeedKind(): FeedKind {
   }
   return 'formula'
 }
-
-function nowClockValue() {
-  const d = new Date()
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
-
-const WHEN_OPTIONS = [
-  { mins: 0, label: 'Sekarang' },
-  { mins: 15, label: '15 mnt lalu' },
-  { mins: 30, label: '30 mnt lalu' },
-  { mins: 60, label: '1 jam lalu' },
-] as const
-
-type WhenMode = 'preset' | 'custom'
 
 export function QuickLogSheet({
   action,
@@ -88,9 +66,7 @@ export function QuickLogSheet({
   const [soothedHow, setSoothedHow] = useState('')
   const [soothedOk, setSoothedOk] = useState<boolean | undefined>(undefined)
   const [notes, setNotes] = useState('')
-  const [minsAgo, setMinsAgo] = useState(0)
-  const [whenMode, setWhenMode] = useState<WhenMode>('preset')
-  const [customTime, setCustomTime] = useState(nowClockValue)
+  const [when, setWhen] = useState<WhenValue>(defaultWhenValue)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
@@ -104,28 +80,10 @@ export function QuickLogSheet({
     setCryCause('hungry')
     setFeedKind(readLastFeedKind())
     setDurationMin(15)
-    setMinsAgo(0)
-    setWhenMode('preset')
-    setCustomTime(nowClockValue())
+    setWhen(defaultWhenValue())
   }, [action, profile?.defaultFeedMl])
 
-  const customIso = useMemo(
-    () => (whenMode === 'custom' ? clockTimeToIso(customTime) : null),
-    [whenMode, customTime],
-  )
-
-  const customMinsAgo = useMemo(() => {
-    if (!customIso) return 0
-    return Math.max(
-      0,
-      Math.round((Date.now() - new Date(customIso).getTime()) / 60_000),
-    )
-  }, [customIso])
-
-  const timestamp = useMemo(() => {
-    if (whenMode === 'custom' && customIso) return customIso
-    return minsAgo > 0 ? minutesAgoIso(minsAgo) : undefined
-  }, [whenMode, customIso, minsAgo])
+  const timestamp = useMemo(() => whenToIso(when), [when])
 
   async function save() {
     if (!action || saving) return
@@ -160,7 +118,7 @@ export function QuickLogSheet({
         onSaved('Popok tersimpan')
       } else if (action === 'sleep') {
         if (openSleep) {
-          await endSleep(openSleep.id, timestamp ?? new Date().toISOString())
+          await endSleep(openSleep.id, whenToIso(when, { force: true }))
           onSaved('Tidur diakhiri')
         } else {
           await logSleep({ timestamp, notes: notes || undefined })
@@ -194,6 +152,9 @@ export function QuickLogSheet({
           : action === 'cry'
             ? 'Lacak tangis'
             : ''
+
+  const whenLabel =
+    action === 'sleep' && openSleep ? 'Kapan bangun' : 'Kapan'
 
   return (
     <Sheet open={!!action} onClose={onClose} title={title}>
@@ -298,7 +259,7 @@ export function QuickLogSheet({
         {action === 'sleep' ? (
           <p className="rounded-[22px] bg-white/45 px-5 py-4 text-caption leading-relaxed text-ink backdrop-blur-xl">
             {openSleep
-              ? 'Ada sesi tidur yang masih berjalan. Simpan untuk menandai bangun.'
+              ? 'Ada sesi tidur yang masih berjalan. Pilih kapan bangun, lalu simpan.'
               : 'Mulai sesi tidur. Nanti akhiri dari banner di Beranda atau tombol ini.'}
           </p>
         ) : null}
@@ -384,51 +345,14 @@ export function QuickLogSheet({
           </>
         ) : null}
 
-        <Field label="Kapan">
-          <div className="grid grid-cols-2 gap-2">
-            {WHEN_OPTIONS.map((opt) => (
-              <OptionChip
-                key={opt.mins}
-                selected={whenMode === 'preset' && minsAgo === opt.mins}
-                onClick={() => {
-                  setWhenMode('preset')
-                  setMinsAgo(opt.mins)
-                }}
-                className="w-full"
-              >
-                {opt.label}
-              </OptionChip>
-            ))}
-            <OptionChip
-              selected={whenMode === 'custom'}
-              onClick={() => {
-                setWhenMode('custom')
-                setCustomTime(nowClockValue())
-              }}
-              className="col-span-2 w-full"
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <Clock size={16} weight="bold" />
-                Pilih jam…
-              </span>
-            </OptionChip>
-          </div>
-
-          {whenMode === 'custom' ? (
-            <div className="mt-3 space-y-2">
-              <TextField
-                type="time"
-                value={customTime}
-                onChange={(e) => setCustomTime(e.target.value)}
-                className="font-medium tabular-nums"
-              />
-              <p className="text-caption text-ink-muted">
-                Jam {customTime.replace(':', '.')} ·{' '}
-                {formatMinsAgoLabel(customMinsAgo)}
-              </p>
-            </div>
-          ) : null}
-        </Field>
+        <WhenField
+          value={when}
+          onChange={setWhen}
+          label={whenLabel}
+          customLabel={
+            action === 'sleep' && openSleep ? 'Pilih jam bangun…' : 'Pilih jam…'
+          }
+        />
 
         {action !== 'sleep' || !openSleep ? (
           <Field label="Catatan (opsional)">

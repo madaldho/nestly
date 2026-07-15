@@ -4,7 +4,8 @@ import { differenceInMinutes, parseISO } from 'date-fns'
 import { Baby, Drop, MoonStars, SmileySad, Stop, Warning } from '@phosphor-icons/react'
 import { motion } from 'framer-motion'
 import { db } from '@/db'
-import { endSleep, minutesAgoIso, restoreEvent } from '@/lib/actions'
+import { endSleep, restoreEvent } from '@/lib/actions'
+import { whenToIso } from '@/lib/when'
 import {
   ageLabel,
   buildDaySummary,
@@ -14,13 +15,14 @@ import {
   lastFeed,
   todayEvents,
 } from '@/lib/insights'
-import { Card, Toast } from '@/components/ui/primitives'
+import { Card, PillButton, Toast } from '@/components/ui/primitives'
 import { EventList } from '@/components/features/EventList'
 import { QuickLogSheet } from '@/components/features/QuickLogSheet'
 import {
   OnboardingSetup,
   needsOnboarding,
 } from '@/components/features/OnboardingSetup'
+import { WhenField, defaultWhenValue, type WhenValue } from '@/components/features/WhenField'
 import type { BabyEvent, QuickAction } from '@/types'
 
 const NO_EVENTS: BabyEvent[] = []
@@ -228,6 +230,8 @@ function SleepBanner({
 }) {
   const now = useTick(!!openSleep)
   const [ending, setEnding] = useState(false)
+  const [pickWhen, setPickWhen] = useState(false)
+  const [when, setWhen] = useState<WhenValue>(defaultWhenValue)
 
   if (!openSleep) return null
 
@@ -236,17 +240,17 @@ function SleepBanner({
     differenceInMinutes(new Date(now), parseISO(openSleep.timestamp)),
   )
   const stale = mins >= 180
+  const showWhen = pickWhen || stale
 
-  async function handleEnd(adjustedMinsAgo?: number) {
+  async function handleEnd(value?: WhenValue) {
     if (!openSleep || ending) return
     setEnding(true)
     try {
-      const endAt =
-        adjustedMinsAgo != null
-          ? minutesAgoIso(adjustedMinsAgo)
-          : new Date().toISOString()
+      const endAt = whenToIso(value ?? when, { force: true })
       await endSleep(openSleep.id, endAt)
       onEnded()
+      setPickWhen(false)
+      setWhen(defaultWhenValue())
     } finally {
       setEnding(false)
     }
@@ -270,43 +274,70 @@ function SleepBanner({
             Mulai {formatTime(openSleep.timestamp)} · {formatDuration(mins)}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleEnd()}
-          disabled={ending}
-          className="press flex min-h-11 items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-caption font-semibold text-white disabled:opacity-40"
-        >
-          <Stop size={16} weight="fill" />
-          Selesai
-        </button>
+        {!showWhen ? (
+          <button
+            type="button"
+            onClick={() => void handleEnd(defaultWhenValue())}
+            disabled={ending}
+            className="press flex min-h-11 items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-caption font-semibold text-white disabled:opacity-40"
+          >
+            <Stop size={16} weight="fill" />
+            Selesai
+          </button>
+        ) : null}
       </div>
 
-      {stale ? (
-        <div className="flex items-start gap-2 rounded-2xl bg-[#cc3300]/8 px-3 py-2.5 text-caption text-[#a32a00]">
-          <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
-          <div className="min-w-0 flex-1">
-            <p className="font-semibold">Sudah {formatDuration(mins)} — lupa akhiri?</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={ending}
-                onClick={() => void handleEnd(0)}
-                className="press rounded-full bg-white/80 px-3 py-1.5 font-semibold text-ink"
-              >
-                Bangun sekarang
-              </button>
-              <button
-                type="button"
-                disabled={ending}
-                onClick={() => void handleEnd(60)}
-                className="press rounded-full bg-white/80 px-3 py-1.5 font-semibold text-ink"
-              >
-                Bangun 1 jam lalu
-              </button>
+      {!showWhen ? (
+        <button
+          type="button"
+          onClick={() => {
+            setWhen(defaultWhenValue())
+            setPickWhen(true)
+          }}
+          className="text-caption font-semibold text-accent"
+        >
+          Atur jam bangun…
+        </button>
+      ) : (
+        <div className="space-y-3">
+          {stale ? (
+            <div className="flex items-start gap-2 rounded-2xl bg-[#cc3300]/8 px-3 py-2.5 text-caption text-[#a32a00]">
+              <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
+              <p className="font-semibold">
+                Sudah {formatDuration(mins)} — pilih kapan benar-benar bangun.
+              </p>
             </div>
+          ) : null}
+          <WhenField
+            value={when}
+            onChange={setWhen}
+            label="Kapan bangun"
+            customLabel="Pilih jam bangun…"
+          />
+          <div className="flex gap-2">
+            <PillButton
+              className="flex-1"
+              disabled={ending}
+              onClick={() => void handleEnd()}
+            >
+              <Stop size={16} weight="fill" />
+              {ending ? 'Menyimpan…' : 'Akhiri tidur'}
+            </PillButton>
+            {!stale ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setPickWhen(false)
+                  setWhen(defaultWhenValue())
+                }}
+                className="press min-h-11 rounded-full px-4 text-caption font-semibold text-ink-muted"
+              >
+                Batal
+              </button>
+            ) : null}
           </div>
         </div>
-      ) : null}
+      )}
     </motion.section>
   )
 }
