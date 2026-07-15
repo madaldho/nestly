@@ -1,19 +1,6 @@
 import type { CryCause } from '@/types'
 
-export type CrySoundKey =
-  | 'neh'
-  | 'owh'
-  | 'heh'
-  | 'eairh'
-  | 'eh'
-  | 'belly_pain'
-  | 'burping'
-  | 'cold_hot'
-  | 'discomfort'
-  | 'hungry'
-  | 'lonely'
-  | 'scared'
-  | 'tired'
+export type CrySoundKey = 'neh' | 'owh' | 'heh' | 'eairh' | 'eh'
 
 export interface CryPrediction {
   sound: string
